@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Union, List
-from .._common import logger
+from .._common import logger, DUCKDB_FILE
+
+import duckdb
 
 
 class DuckDBClient:
@@ -11,7 +13,7 @@ class DuckDBClient:
 
     from duckdb import DuckDBPyConnection
 
-    def __init__(self, conn: DuckDBPyConnection):
+    def __init__(self, conn: DuckDBPyConnection = duckdb.connect(DUCKDB_FILE)):
         self.conn = conn
 
     @dataclass
