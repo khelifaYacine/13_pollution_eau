@@ -27,7 +27,7 @@ from pipelines.utils.utils import (
     extract_dataset_datetime,
     get_edc_dataset_years_to_update,
 )
-
+from .client.duckdb_client import DuckDBClient
 from ._common import (
     CACHE_FOLDER,
     DUCKDB_FILE,
@@ -39,22 +39,6 @@ from ._config_edc import create_edc_yearly_filename, get_edc_config
 
 logger = logging.getLogger(__name__)
 edc_config = get_edc_config()
-
-
-def check_table_existence(conn: duckdb.DuckDBPyConnection, table_name: str) -> bool:
-    """
-    Check if a table exists in the duckdb database
-    :param conn: The duckdb connection to use
-    :param table_name: The table name to check existence
-    :return: True if the table exists, False if not
-    """
-    query = """
-        SELECT COUNT(*)
-        FROM information_schema.tables
-        WHERE table_name = ?
-        """
-    conn.execute(query, (table_name,))
-    return list(conn.fetchone())[0] == 1
 
 
 def download_extract_insert_yearly_edc_data(year: str):
@@ -94,7 +78,8 @@ def download_extract_insert_yearly_edc_data(year: str):
                 pbar.update(1)
 
     logger.info("   Creating or updating tables in the database...")
-    conn = duckdb.connect(DUCKDB_FILE)
+
+    duckcb_client = DuckDBClient(conn=duckdb.connect(DUCKDB_FILE))
 
     total_operations = len(FILES)
     with tqdm(
@@ -109,31 +94,31 @@ def download_extract_insert_yearly_edc_data(year: str):
                     year=year,
                 ),
             )
+            if duckcb_client.check_table_existence(table_name=file_info["table_name"]):
+                duckcb_client.delete_from_table(
+                    table_name=file_info["table_name"],
+                    filters=[
+                        duckcb_client.SQLFilters(
+                            colname="de_partition", filter_value=year, coltype="INTEGER"
+                        )
+                    ],
+                )
 
-            if check_table_existence(conn=conn, table_name=file_info["table_name"]):
-                query = f"""
-                    DELETE FROM {file_info["table_name"]}
-                    WHERE de_partition = CAST(? AS INTEGER)
-                    ;
-                """
-                conn.execute(query, (year,))
-                query_start = f"INSERT INTO {file_info['table_name']} "
+                ingest_type = "INSERT"
 
             else:
-                query_start = f"CREATE TABLE {file_info['table_name']} AS "
+                ingest_type = "CREATE"
 
-            query_select = """
-                SELECT
-                    *,
-                    CAST(? AS INTEGER)      AS de_partition,
-                    current_date            AS de_ingestion_date,
-                    ?                       AS de_dataset_datetime
-                FROM read_csv(?, header=true, delim=',');
-            """
-            conn.execute(query_start + query_select, (year, dataset_datetime, filepath))
+            duckcb_client.ingest_from_csv(
+                ingest_type=ingest_type,
+                table_name = file_info['table_name'],
+                de_partition=year,
+                dataset_datetime=dataset_datetime,
+                filepath=filepath,
+            )
             pbar.update(1)
 
-    conn.close()
+    duckcb_client.close()
 
     logger.info("   Cleaning up cache...")
     clear_cache()
@@ -143,14 +128,13 @@ def download_extract_insert_yearly_edc_data(year: str):
 
 def drop_edc_tables():
     """Drop tables using tables names defined in _config_edc.py"""
-    conn = duckdb.connect(DUCKDB_FILE)
+    duckdb_client = DuckDBClient(conn=duckdb.connect(DUCKDB_FILE))
+
     tables_names = [
         file_info["table_name"] for file_info in edc_config["files"].values()
     ]
-    for table_name in tables_names:
-        query = f"DROP TABLE IF EXISTS {table_name};"
-        logger.info(f"Drop table {table_name} (query: {query})")
-        conn.execute(query)
+
+    duckdb_client.drop_tables(table_names=tables_names)
     return True
 
 

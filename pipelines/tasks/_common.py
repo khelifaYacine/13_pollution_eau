@@ -1,6 +1,8 @@
+import logging
 import os
 import shutil
 from pathlib import Path
+
 import requests
 from typing import Union
 from tqdm import tqdm
@@ -12,6 +14,8 @@ CACHE_FOLDER = os.path.join(ROOT_FOLDER, "database", "cache")
 
 os.makedirs(CACHE_FOLDER, exist_ok=True)
 os.makedirs(DATABASE_FOLDER, exist_ok=True)
+
+logger = logging.getLogger(__name__)
 
 # common style for the progressbar dans cli
 tqdm_common = {
