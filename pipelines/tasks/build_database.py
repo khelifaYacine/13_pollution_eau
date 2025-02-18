@@ -18,7 +18,6 @@ Examples:
 import logging
 import os
 from typing import List, Literal
-from zipfile import ZipFile
 
 import duckdb
 from tqdm import tqdm
@@ -34,6 +33,7 @@ from ._common import (
     clear_cache,
     download_file_from_https,
     tqdm_common,
+    extract_file,
 )
 from ._config_edc import create_edc_yearly_filename, get_edc_config
 
@@ -68,14 +68,7 @@ def download_extract_insert_yearly_edc_data(year: str):
     download_file_from_https(url=DATA_URL, filepath=ZIP_FILE)
 
     logger.info("   Extracting files...")
-    with ZipFile(ZIP_FILE, "r") as zip_ref:
-        file_list = zip_ref.namelist()
-        with tqdm(
-            total=len(file_list), unit="file", desc="Extracting", **tqdm_common
-        ) as pbar:
-            for file in file_list:
-                zip_ref.extract(file, EXTRACT_FOLDER)  # Extract each file
-                pbar.update(1)
+    extract_file(zip_file=ZIP_FILE, extract_folder=EXTRACT_FOLDER)
 
     logger.info("   Creating or updating tables in the database...")
 
@@ -111,7 +104,7 @@ def download_extract_insert_yearly_edc_data(year: str):
 
             duckcb_client.ingest_from_csv(
                 ingest_type=ingest_type,
-                table_name = file_info['table_name'],
+                table_name=file_info["table_name"],
                 de_partition=year,
                 dataset_datetime=dataset_datetime,
                 filepath=filepath,

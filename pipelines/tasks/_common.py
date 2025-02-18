@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 from pathlib import Path
+from zipfile import ZipFile
 
 import requests
 from typing import Union
@@ -55,3 +56,15 @@ def download_file_from_https(url: str, filepath: Union[str, Path]):
                 pbar.update(len(chunk))
 
     return filepath.name
+
+
+def extract_file(zip_file, extract_folder):
+    with ZipFile(zip_file, "r") as zip_ref:
+        file_list = zip_ref.namelist()
+        with tqdm(
+            total=len(file_list), unit="file", desc="Extracting", **tqdm_common
+        ) as pbar:
+            for file in file_list:
+                zip_ref.extract(file, extract_folder)  # Extract each file
+                pbar.update(1)
+    return True
